@@ -6,6 +6,7 @@
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
+#include "Eigen-3.3/Eigen/LU"
 #include "MPC.h"
 #include "json.hpp"
 
@@ -65,6 +66,26 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+Eigen::Vector3f globalToLocal(double global_x, double global_y, double car_x, double car_y, double car_psi) {
+    Eigen::Matrix3f T;
+    Eigen::Vector3f P;
+    T << cos(car_psi), -sin(car_psi), car_x,
+         sin(car_psi), cos(car_psi), car_y,
+         0,0,1;
+    P << global_x, global_y, 1;
+    return T.inverse() * P;
+}
+
+Eigen::Vector3f localToGlobal(double local_x, double local_y, double car_x, double car_y, double car_psi) {
+    Eigen::Matrix3f T;
+    Eigen::Vector3f P;
+    T << cos(car_psi), -sin(car_psi), car_x,
+         sin(car_psi), cos(car_psi), car_y,
+         0,0,1;
+    P << local_x, local_y, 1;
+    return T * P;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -87,6 +108,7 @@ int main() {
           // j[1] is the data JSON object
           vector<double> ptsx = j[1]["ptsx"];
           vector<double> ptsy = j[1]["ptsy"];
+
           double px = j[1]["x"];
           double py = j[1]["y"];
           double psi = j[1]["psi"];
@@ -120,6 +142,14 @@ int main() {
           //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
+          
+          for (int i = 0; i < ptsx.size() && i < ptsy.size(); i++) {
+            double waypoint_x = ptsx[i];
+            double waypoint_y = ptsy[i]; 
+            Eigen::Vector3f local_waypoint = globalToLocal(waypoint_x, waypoint_y, px, py, psi);
+            next_x_vals.push_back(local_waypoint[0]);
+            next_y_vals.push_back(local_waypoint[1]);
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
