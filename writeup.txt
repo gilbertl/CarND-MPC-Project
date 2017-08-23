@@ -1,0 +1,33 @@
+The Model
+=========
+The model used in our MPC is described by the following equations:
+
+// x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
+// y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
+// psi_[t+1] = psi[t] + v[t] / Lf * delta[t] * dt
+// v_[t+1] = v[t] + a[t] * dt
+// cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
+// epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
+
+
+Timestep Length and Elapsed Duration
+====================================
+I ended up using N = 20 and dt = 0.05 for a total window of 1 second.
+
+I initially tried N = 20, dt = 0.1 and got a lot of sudden turns. I suspected that our predictions were too far apart, so I decreased the timestamp to 0.05.
+
+I also experimented with N = 40, dt = 0.05 but noticed a lot of instability. It's not apparent to me why this would be the case, since N is only suppose to increase computational cost.
+
+
+Polynomial Fitting and MPC Preprocessing
+========================================
+I converted the waypoints into car coordinates before fitting them. 
+
+I did not do this initially and ended up with calculation errors relate to the car angle; in the global space, the tangential angle may point the opposite way as the direction of the car.
+
+Model Predictive Control with Latency
+=====================================
+To adjust for 100ms latency, I use the above model to adjust estimate the state 100ms into the future. Then I passed the state into the solver and used the returned actuators.
+
+
+
