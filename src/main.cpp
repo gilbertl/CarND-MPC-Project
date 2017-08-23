@@ -108,11 +108,37 @@ int main() {
           // j[1] is the data JSON object
           vector<double> ptsx = j[1]["ptsx"];
           vector<double> ptsy = j[1]["ptsy"];
-
+          Eigen::VectorXd ptsx_vector, ptsy_vector;
+          ptsx_vector.resize(ptsx.size());
+          ptsy_vector.resize(ptsy.size());
+          for (int i = 0; i < ptsx.size(); i++) {
+            ptsx_vector(i) = ptsx[i];
+          }
+          for (int i = 0; i < ptsy.size(); i++) {
+            ptsy_vector(i) = ptsy[i];
+          }
           double px = j[1]["x"];
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+
+          // TODO(gilbertleung): what order polynomial?
+          auto coeffs = polyfit(ptsx_vector, ptsy_vector, 3);
+          double cte = polyeval(coeffs, px) - py;
+          double tangent = atan(coeffs[1] + 2 * coeffs[2] * px + 3 * coeffs[3] * px * px);
+
+          if (abs(psi - tangent) > abs(psi - (tangent + M_PI))) {
+            std::cout << "adding pi to tangetn " << std::endl;
+            tangent += M_PI;
+          }
+          double epsi = psi - tangent;
+          std::cout << "y: " << py << ", idealy: " << polyeval(coeffs, px) << "cte: " << cte << std::endl;
+          std::cout << "psi: " << psi << ", tangent: " << tangent << "epsi: " << epsi << std::endl;
+
+          Eigen::VectorXd state(6);
+          state << px, py, psi, v, cte, epsi;
+
+          auto vars = mpc.Solve(state, coeffs);
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -120,8 +146,8 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+          double steer_value =  -1 * vars[6] / deg2rad(25);
+          double throttle_value = vars[7];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -135,6 +161,13 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
+
+          for (int i = 0; i < ptsx.size(); i++) {
+            double y = polyeval(coeffs, ptsx[i]);
+            Eigen::Vector3f local_point = globalToLocal(ptsx[i], y, px, py, psi);
+            mpc_x_vals.push_back(local_point[0]);
+            mpc_y_vals.push_back(local_point[1]);
+          }
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
@@ -169,7 +202,8 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          // TODO(gilbertleung): add back the latency
+          // this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
