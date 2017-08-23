@@ -108,35 +108,27 @@ int main() {
           // j[1] is the data JSON object
           vector<double> ptsx = j[1]["ptsx"];
           vector<double> ptsy = j[1]["ptsy"];
-          Eigen::VectorXd ptsx_vector, ptsy_vector;
-          ptsx_vector.resize(ptsx.size());
-          ptsy_vector.resize(ptsy.size());
-          for (int i = 0; i < ptsx.size(); i++) {
-            ptsx_vector(i) = ptsx[i];
-          }
-          for (int i = 0; i < ptsy.size(); i++) {
-            ptsy_vector(i) = ptsy[i];
-          }
           double px = j[1]["x"];
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
 
-          // TODO(gilbertleung): what order polynomial?
-          auto coeffs = polyfit(ptsx_vector, ptsy_vector, 3);
-          double cte = polyeval(coeffs, px) - py;
-          double tangent = atan(coeffs[1] + 2 * coeffs[2] * px + 3 * coeffs[3] * px * px);
-
-          if (abs(psi - tangent) > abs(psi - (tangent + M_PI))) {
-            std::cout << "adding pi to tangetn " << std::endl;
-            tangent += M_PI;
+          Eigen::Vector3f local_coords;
+          Eigen::VectorXd waypointx_vector, waypointy_vector;
+          waypointx_vector.resize(ptsx.size());
+          waypointy_vector.resize(ptsy.size());
+          for (int i = 0; i < ptsx.size() && i < ptsy.size(); i++) {
+            local_coords = globalToLocal(ptsx[i], ptsy[i], px, py, psi);
+            waypointx_vector(i) = local_coords[0];
+            waypointy_vector(i) = local_coords[1];
           }
-          double epsi = psi - tangent;
-          std::cout << "y: " << py << ", idealy: " << polyeval(coeffs, px) << "cte: " << cte << std::endl;
-          std::cout << "psi: " << psi << ", tangent: " << tangent << "epsi: " << epsi << std::endl;
+
+          auto coeffs = polyfit(waypointx_vector, waypointy_vector, 3);
+          double cte = polyeval(coeffs, 0);
+          double epsi = -atan(coeffs[1]);
 
           Eigen::VectorXd state(6);
-          state << px, py, psi, v, cte, epsi;
+          state << 0, 0, 0, v, cte, epsi;
 
           auto vars = mpc.Solve(state, coeffs);
 
@@ -162,11 +154,10 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
 
-          for (int i = 0; i < ptsx.size(); i++) {
-            double y = polyeval(coeffs, ptsx[i]);
-            Eigen::Vector3f local_point = globalToLocal(ptsx[i], y, px, py, psi);
-            mpc_x_vals.push_back(local_point[0]);
-            mpc_y_vals.push_back(local_point[1]);
+          for (int i = 0; i < waypointx_vector.size(); i++) {
+            double y = polyeval(coeffs, waypointx_vector[i]);
+            mpc_x_vals.push_back(waypointx_vector[i]);
+            mpc_y_vals.push_back(y);
           }
 
           msgJson["mpc_x"] = mpc_x_vals;
@@ -176,12 +167,9 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
           
-          for (int i = 0; i < ptsx.size() && i < ptsy.size(); i++) {
-            double waypoint_x = ptsx[i];
-            double waypoint_y = ptsy[i]; 
-            Eigen::Vector3f local_waypoint = globalToLocal(waypoint_x, waypoint_y, px, py, psi);
-            next_x_vals.push_back(local_waypoint[0]);
-            next_y_vals.push_back(local_waypoint[1]);
+          for (int i = 0; i < waypointx_vector.size(); i++) {
+            next_x_vals.push_back(waypointx_vector[i]);
+            next_y_vals.push_back(waypointy_vector[i]);
           }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
